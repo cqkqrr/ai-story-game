@@ -5,10 +5,12 @@ import os
 import json
 from dotenv import load_dotenv
 
+# .env dosyasındaki API anahtarını yükler
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def get_system_prompt(data):
@@ -98,16 +100,19 @@ def generate_dalle_image(prompt, theme):
             n=1
         )
         return response.data[0].url
-    except:
+    except Exception as e:
+        print(f"DALL-E Hatası: {e}")
         return ""
 
 @app.route('/api/story/next', methods=['POST'])
 def next_step():
     data = request.json or {}
-    user_action = data.get('action', '')
+    user_action = data.get('action', 'Etrafıma bakınıyorum.')
     
-    theme = data.get('mode', 'Cyberpunk')
-    last_location = data.get('currentScene', {}).get('location', '')
+    # Frontend'den gelen dinamik bilgiler
+    theme = data.get('mode', 'Cyberpunk') 
+    current_scene = data.get('currentScene', {})
+    last_location = current_scene.get('location', '')
     
     try:
         response = client.chat.completions.create(
@@ -124,12 +129,17 @@ def next_step():
 
         if new_location.lower() != last_location.lower():
             img_prompt = ai_data.get('scene', {}).get('imagePrompt', '')
-            ai_data['scene']['imageUrl'] = generate_dalle_image(img_prompt, theme)
+            if img_prompt:
+                ai_data['scene']['imageUrl'] = generate_dalle_image(img_prompt, theme)
+            else:
+                ai_data['scene']['imageUrl'] = current_scene.get('image', '')
         else:
-            ai_data['scene']['imageUrl'] = data.get('currentScene', {}).get('image', '')
+            ai_data['scene']['imageUrl'] = current_scene.get('image', '')
         
         return jsonify(ai_data)
+        
     except Exception as e:
+        print(f"Hata detayı: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

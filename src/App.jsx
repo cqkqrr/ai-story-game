@@ -83,6 +83,13 @@ const getDiceResult = (roll, difficultyId) => {
   return "Başarısız"
 }
 
+const getStoryPhase = (turnCount) => {
+  if (turnCount <= 2) return "intro"
+  if (turnCount <= 7) return "rising"
+  if (turnCount <= 11) return "climax"
+  return "finale"
+}
+
 const preloadSceneImage = (imageUrl) => {
   return new Promise((resolve, reject) => {
     if (!imageUrl) {
@@ -122,6 +129,11 @@ function App() {
   const [health, setHealth] = useState(85)
   const [energy, setEnergy] = useState(60)
   const [saveMessage, setSaveMessage] = useState("")
+
+  const [turnCount, setTurnCount] = useState(0)
+  const [storyPhase, setStoryPhase] = useState("intro")
+  const [flags, setFlags] = useState({})
+  const [storySummary, setStorySummary] = useState("")
 
   const chatMessagesRef = useRef(null)
 
@@ -185,6 +197,10 @@ function App() {
 
     setHealth(startingHealth)
     setEnergy(startingEnergy)
+    setTurnCount(0)
+    setStoryPhase("intro")
+    setFlags({})
+    setStorySummary("")
     setCurrentScene(startingScene)
     setDisplayedImage(startingScene.image)
     setIsImageLoading(false)
@@ -209,7 +225,7 @@ function App() {
     setSaveMessage("")
   }
 
-  const callAI = async (actionText, diceData = null) => {
+  const callAI = async (actionText, diceData = null, nextTurnCount, nextStoryPhase) => {
     const activeScenario = getActiveScenario()
 
     const response = await fetch(API_URL, {
@@ -219,14 +235,28 @@ function App() {
       },
       body: JSON.stringify({
         action: actionText,
+        message: actionText,
+
         dice: diceData,
+
         mode: activeScenario.title,
+        theme: selectedMode.id,
         customScenario: activeScenario.description,
-        difficulty: selectedDifficulty.title,
-        narrationStyle: selectedNarration.title,
+
+        difficulty: selectedDifficulty.id,
+        difficultyTitle: selectedDifficulty.title,
+        narrationStyle: selectedNarration.id,
+        narrationStyleTitle: selectedNarration.title,
+
         currentScene,
         health,
         energy,
+
+        turnCount: nextTurnCount,
+        storyPhase: nextStoryPhase,
+        storySummary,
+        flags,
+
         recentMessages: messages.slice(-6),
       }),
     })
@@ -241,8 +271,8 @@ function App() {
   }
 
   const normalizeChoices = (choices) => {
-    if (!Array.isArray(choices) || choices.length === 0) {
-      return currentScene.choices
+    if (!Array.isArray(choices)) {
+      return []
     }
 
     return choices.map((choice) => {
@@ -274,6 +304,8 @@ function App() {
       aiMessage: data.aiMessage || "Hikâye devam ediyor.",
       healthChange: Number(data.stats?.healthChange || 0),
       energyChange: Number(data.stats?.energyChange || 0),
+      storySummary: data.stats?.storySummary || storySummary,
+      flags: data.flags && typeof data.flags === "object" ? data.flags : null,
     }
   }
 
@@ -302,6 +334,9 @@ function App() {
   const handleAction = async (actionText, diceData = null) => {
     if (isThinking || isRollingDice) return
 
+    const nextTurnCount = turnCount + 1
+    const nextStoryPhase = getStoryPhase(nextTurnCount)
+
     setMessages((prev) => [
       ...prev,
       {
@@ -315,13 +350,24 @@ function App() {
     setIsThinking(true)
 
     try {
-      const aiData = await callAI(actionText, diceData)
+      const aiData = await callAI(actionText, diceData, nextTurnCount, nextStoryPhase)
       const normalizedData = normalizeAIData(aiData)
 
       await updateSceneWithPreloadedImage(normalizedData.scene)
 
       setHealth((prev) => Math.max(0, Math.min(100, prev + normalizedData.healthChange)))
       setEnergy((prev) => Math.max(0, Math.min(100, prev + normalizedData.energyChange)))
+
+      setTurnCount(nextTurnCount)
+      setStoryPhase(nextStoryPhase)
+      setStorySummary(normalizedData.storySummary)
+
+      if (normalizedData.flags) {
+        setFlags((prev) => ({
+          ...prev,
+          ...normalizedData.flags,
+        }))
+      }
 
       setMessages((prev) => [
         ...prev,
@@ -396,6 +442,11 @@ function App() {
       messages,
       health,
       energy,
+
+      turnCount,
+      storyPhase,
+      flags,
+      storySummary,
     }
 
     localStorage.setItem("aiStoryQuestSave", JSON.stringify(saveData))
@@ -422,6 +473,12 @@ function App() {
     setMessages(parsedData.messages)
     setHealth(parsedData.health)
     setEnergy(parsedData.energy)
+
+    setTurnCount(parsedData.turnCount || 0)
+    setStoryPhase(parsedData.storyPhase || "intro")
+    setFlags(parsedData.flags || {})
+    setStorySummary(parsedData.storySummary || "")
+
     setIsImageLoading(false)
     setIsGameStarted(true)
 
@@ -479,8 +536,7 @@ function App() {
                 {gameModes.map((mode) => (
                   <button
                     key={mode.id}
-                    className={`setup-card ${selectedMode.id === mode.id ? "active" : ""
-                      }`}
+                    className={`setup-card ${selectedMode.id === mode.id ? "active" : ""}`}
                     onClick={() => selectDefaultMode(mode)}
                   >
                     <div className="setup-icon">{mode.icon}</div>
@@ -490,8 +546,9 @@ function App() {
                 ))}
 
                 <button
-                  className={`setup-card custom-scenario-card ${selectedMode.id === "custom" ? "active" : ""
-                    }`}
+                  className={`setup-card custom-scenario-card ${
+                    selectedMode.id === "custom" ? "active" : ""
+                  }`}
                   onClick={selectCustomScenario}
                 >
                   <div className="setup-icon">＋</div>
@@ -532,8 +589,9 @@ function App() {
                 {difficulties.map((difficulty) => (
                   <button
                     key={difficulty.id}
-                    className={`setup-card ${selectedDifficulty.id === difficulty.id ? "active" : ""
-                      }`}
+                    className={`setup-card ${
+                      selectedDifficulty.id === difficulty.id ? "active" : ""
+                    }`}
                     onClick={() => setSelectedDifficulty(difficulty)}
                   >
                     <strong>{difficulty.title}</strong>
@@ -553,8 +611,9 @@ function App() {
                 {narrationStyles.map((style) => (
                   <button
                     key={style.id}
-                    className={`setup-card ${selectedNarration.id === style.id ? "active" : ""
-                      }`}
+                    className={`setup-card ${
+                      selectedNarration.id === style.id ? "active" : ""
+                    }`}
                     onClick={() => setSelectedNarration(style)}
                   >
                     <strong>{style.title}</strong>
@@ -611,8 +670,9 @@ function App() {
             <img
               src={displayedImage}
               alt={currentScene.title}
-              className={`scene-main-image ${isImageLoading ? "scene-loading" : "scene-loaded"
-                }`}
+              className={`scene-main-image ${
+                isImageLoading ? "scene-loading" : "scene-loaded"
+              }`}
             />
 
             {isImageLoading && (
@@ -636,6 +696,14 @@ function App() {
             <div>
               <span>Enerji</span>
               <strong>{energy}</strong>
+            </div>
+            <div>
+              <span>Tur</span>
+              <strong>{turnCount}</strong>
+            </div>
+            <div>
+              <span>Aşama</span>
+              <strong>{storyPhase}</strong>
             </div>
             <div>
               <span>Konum</span>
@@ -680,8 +748,9 @@ function App() {
             {messages.map((message, index) => (
               <div
                 key={`${message.sender}-${index}`}
-                className={`message ${message.sender === "ai" ? "ai-message" : "user-message"
-                  }`}
+                className={`message ${
+                  message.sender === "ai" ? "ai-message" : "user-message"
+                }`}
               >
                 {message.text}
               </div>
@@ -727,9 +796,7 @@ function App() {
                 >
                   <span className="choice-text">{choiceText}</span>
 
-                  {choiceClue && (
-                    <span className="choice-clue">{choiceClue}</span>
-                  )}
+                  {choiceClue && <span className="choice-clue">{choiceClue}</span>}
                 </button>
               )
             })}
