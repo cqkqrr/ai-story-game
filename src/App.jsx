@@ -47,6 +47,18 @@ const initialScene = {
   choices: ["Etrafıma bakın", "İleri doğru yürüyün", "Çantamı kontrol edin"],
 }
 
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const rollD20 = () => Math.floor(Math.random() * 20) + 1
+
+const getDiceResult = (roll) => {
+  if (roll === 1) return "Kritik Başarısızlık"
+  if (roll === 20) return "Kritik Başarı"
+  if (roll >= 15) return "Başarılı"
+  if (roll >= 8) return "Kısmi Başarı"
+  return "Başarısız"
+}
+
 function App() {
   const [isGameStarted, setIsGameStarted] = useState(false)
   const [selectedMode, setSelectedMode] = useState(gameModes[0])
@@ -62,6 +74,9 @@ function App() {
 
   const [input, setInput] = useState("")
   const [isThinking, setIsThinking] = useState(false)
+  const [isRollingDice, setIsRollingDice] = useState(false)
+  const [diceRoll, setDiceRoll] = useState(null)
+  const [diceResult, setDiceResult] = useState("")
   const [health, setHealth] = useState(85)
   const [energy, setEnergy] = useState(60)
   const [saveMessage, setSaveMessage] = useState("")
@@ -75,7 +90,7 @@ function App() {
         behavior: "smooth",
       })
     }
-  }, [messages, isThinking])
+  }, [messages, isThinking, isRollingDice, diceRoll])
 
   const getActiveScenario = () => {
     const trimmedScenario = customScenario.trim()
@@ -135,6 +150,9 @@ function App() {
     ])
     setInput("")
     setIsThinking(false)
+    setIsRollingDice(false)
+    setDiceRoll(null)
+    setDiceResult("")
     setIsGameStarted(true)
   }
 
@@ -143,7 +161,7 @@ function App() {
     setSaveMessage("")
   }
 
-  const callAI = async (actionText) => {
+  const callAI = async (actionText, diceData = null) => {
     const activeScenario = getActiveScenario()
 
     const response = await fetch(API_URL, {
@@ -153,6 +171,7 @@ function App() {
       },
       body: JSON.stringify({
         action: actionText,
+        dice: diceData,
         mode: activeScenario.title,
         customScenario: activeScenario.description,
         difficulty: selectedDifficulty.title,
@@ -193,25 +212,34 @@ function App() {
     }
   }
 
-  const handleAction = async (actionText) => {
-    if (isThinking) return
+  const handleAction = async (actionText, diceData = null) => {
+    if (isThinking || isRollingDice) return
 
-    setMessages((prev) => [...prev, { sender: "user", text: actionText }])
+    setMessages((prev) => [
+      ...prev,
+      {
+        sender: "user",
+        text: diceData
+          ? `${actionText}\n🎲 Zar sonucu: ${diceData.roll}/20 — ${diceData.result}`
+          : actionText,
+      },
+    ])
+
     setIsThinking(true)
 
     try {
-      const aiData = await callAI(actionText)
-      const result = normalizeAIData(aiData)
+      const aiData = await callAI(actionText, diceData)
+      const normalizedData = normalizeAIData(aiData)
 
-      setCurrentScene(result.scene)
-      setHealth((prev) => Math.max(0, Math.min(100, prev + result.healthChange)))
-      setEnergy((prev) => Math.max(0, Math.min(100, prev + result.energyChange)))
+      setCurrentScene(normalizedData.scene)
+      setHealth((prev) => Math.max(0, Math.min(100, prev + normalizedData.healthChange)))
+      setEnergy((prev) => Math.max(0, Math.min(100, prev + normalizedData.energyChange)))
 
       setMessages((prev) => [
         ...prev,
         {
           sender: "ai",
-          text: result.aiMessage,
+          text: normalizedData.aiMessage,
         },
       ])
     } catch (error) {
@@ -224,7 +252,35 @@ function App() {
       ])
     } finally {
       setIsThinking(false)
+      setDiceRoll(null)
+      setDiceResult("")
     }
+  }
+
+  const handleDiceRoll = async (actionText) => {
+    if (isThinking || isRollingDice) return
+
+    const roll = rollD20()
+    const result = getDiceResult(roll)
+
+    setDiceRoll(null)
+    setDiceResult("")
+    setIsRollingDice(true)
+
+    await delay(700)
+
+    setDiceRoll(roll)
+    setDiceResult(result)
+
+    await delay(900)
+
+    setIsRollingDice(false)
+
+    await handleAction(actionText, {
+      type: "d20",
+      roll,
+      result,
+    })
   }
 
   const handleSendMessage = () => {
@@ -232,7 +288,7 @@ function App() {
     if (!trimmedInput) return
 
     setInput("")
-    handleAction(trimmedInput)
+    handleDiceRoll(trimmedInput)
   }
 
   const handleNewGame = () => {
@@ -532,9 +588,28 @@ function App() {
               </div>
             ))}
 
+            {isRollingDice && (
+              <div className="dice-roll-card">
+                <div className="dice-icon">🎲</div>
+
+                <div className="dice-roll-content">
+                  <span>Zar atılıyor...</span>
+
+                  {diceRoll ? (
+                    <>
+                      <strong>{diceRoll}/20</strong>
+                      <p>{diceResult}</p>
+                    </>
+                  ) : (
+                    <p>Şans hikâyeyi şekillendiriyor.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {isThinking && (
               <div className="message ai-message thinking">
-                AI yeni sahneyi oluşturuyor...
+                AI zar sonucuna göre yeni sahneyi oluşturuyor...
               </div>
             )}
           </div>
@@ -543,8 +618,8 @@ function App() {
             {currentScene.choices.map((choice) => (
               <button
                 key={choice}
-                onClick={() => handleAction(choice)}
-                disabled={isThinking}
+                onClick={() => handleDiceRoll(choice)}
+                disabled={isThinking || isRollingDice}
               >
                 {choice}
               </button>
@@ -561,9 +636,9 @@ function App() {
                   handleSendMessage()
                 }
               }}
-              disabled={isThinking}
+              disabled={isThinking || isRollingDice}
             />
-            <button onClick={handleSendMessage} disabled={isThinking}>
+            <button onClick={handleSendMessage} disabled={isThinking || isRollingDice}>
               Gönder
             </button>
           </div>
