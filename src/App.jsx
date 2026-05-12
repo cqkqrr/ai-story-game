@@ -1,12 +1,14 @@
 import { useState } from "react"
 import "./index.css"
 
+const API_URL = "http://127.0.0.1:5000/api/story/next"
+
 const gameModes = [
   {
     id: "fantasy",
     title: "Karanlık Fantastik",
     description: "Sisli ormanlar, eski kuleler, büyülü haritalar ve gizemli varlıklar.",
-    icon: "🗡️",
+    icon: "🧙",
   },
   {
     id: "cyberpunk",
@@ -23,94 +25,27 @@ const gameModes = [
 ]
 
 const difficulties = [
-  {
-    id: "easy",
-    title: "Kolay",
-    description: "Daha az risk, daha fazla ipucu.",
-  },
-  {
-    id: "normal",
-    title: "Normal",
-    description: "Dengeli hikâye ve karar zorluğu.",
-  },
-  {
-    id: "hard",
-    title: "Zor",
-    description: "Daha sert sonuçlar, daha az kaynak.",
-  },
+  { id: "easy", title: "Kolay", description: "Daha az risk, daha fazla ipucu." },
+  { id: "normal", title: "Normal", description: "Dengeli hikâye ve karar zorluğu." },
+  { id: "hard", title: "Zor", description: "Daha sert sonuçlar, daha az kaynak." },
 ]
 
 const narrationStyles = [
-  {
-    id: "cinematic",
-    title: "Sinematik",
-    description: "Atmosferik, sahne odaklı ve etkileyici anlatım.",
-  },
-  {
-    id: "fast",
-    title: "Kısa ve Hızlı",
-    description: "Daha kısa cevaplar, hızlı oyun akışı.",
-  },
-  {
-    id: "detailed",
-    title: "Detaylı Hikâye",
-    description: "Uzun betimlemeler ve derin hikâye anlatımı.",
-  },
+  { id: "cinematic", title: "Sinematik", description: "Atmosferik, sahne odaklı anlatım." },
+  { id: "fast", title: "Kısa ve Hızlı", description: "Daha kısa cevaplar, hızlı oyun akışı." },
+  { id: "detailed", title: "Detaylı Hikâye", description: "Uzun betimlemeler ve derin hikâye." },
 ]
 
-const scenes = [
-  {
-    title: "Karanlık Orman Girişi",
-    chapter: "Bölüm 1",
-    description:
-      "Sisli ormanın kıyısındasın. Uzakta terk edilmiş bir kule parlıyor. Cebindeki eski harita titremeye başladı.",
-    image: "https://images.unsplash.com/photo-1518709268805-4e9042af2176",
-    location: "Orman",
-    mission: "Kuleyi Bul",
-    aiText:
-      "Yol ikiye ayrılıyor. Sol tarafta yoğun sis, sağ tarafta ise eski taşlardan yapılmış bir patika var.",
-    choices: [
-      "Sisin içine gir",
-      "Taş patikadan ilerle",
-      "Haritayı tekrar incele",
-      "Bulunduğun yeri araştır",
-    ],
-  },
-  {
-    title: "Sisli Patika",
-    chapter: "Bölüm 2",
-    description:
-      "Sisin içine adım attığında çevrendeki sesler boğuklaşır. Haritadaki semboller mavi bir ışıkla yanmaya başlar.",
-    image: "https://images.unsplash.com/photo-1448375240586-882707db888b",
-    location: "Sisli Patika",
-    mission: "Işığı Takip Et",
-    aiText:
-      "Sislerin arasında eski bir taş kapı beliriyor. Kapının üzerinde bilinmeyen bir dilde yazılar var.",
-    choices: [
-      "Kapıdaki yazıyı incele",
-      "Kapıyı açmaya çalış",
-      "Geri dön",
-      "Haritadaki ışığı takip et",
-    ],
-  },
-  {
-    title: "Terk Edilmiş Kule",
-    chapter: "Bölüm 3",
-    description:
-      "Kulenin önüne ulaştın. Taş duvarlar çatlamış, kapı ise içeriden gelen mor bir ışıkla aralanmış durumda.",
-    image: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee",
-    location: "Eski Kule",
-    mission: "Kuleye Gir",
-    aiText:
-      "Kule kapısının ardında seni bekleyen bir enerji hissediyorsun. İçeri girmek cesaret istiyor.",
-    choices: [
-      "Kuleye gir",
-      "Kapının çevresini araştır",
-      "Bir süre bekle",
-      "Ormana geri dön",
-    ],
-  },
-]
+const initialScene = {
+  title: "Başlangıç Noktası",
+  chapter: "Bölüm 1",
+  description:
+    "Maceranın eşiğindesin. Seçtiğin evren birazdan yapay zekâ tarafından şekillendirilecek.",
+  image: "https://images.unsplash.com/photo-1518709268805-4e9042af2176",
+  location: "Başlangıç",
+  mission: "İlk hamleni yap",
+  choices: ["Etrafıma bakın", "İleri doğru yürüyün", "Çantamı kontrol edin"],
+}
 
 function App() {
   const [isGameStarted, setIsGameStarted] = useState(false)
@@ -118,68 +53,42 @@ function App() {
   const [selectedDifficulty, setSelectedDifficulty] = useState(difficulties[1])
   const [selectedNarration, setSelectedNarration] = useState(narrationStyles[0])
 
-  const [sceneIndex, setSceneIndex] = useState(0)
+  const [currentScene, setCurrentScene] = useState(initialScene)
   const [messages, setMessages] = useState([
-    {
-      sender: "ai",
-      text: scenes[0].aiText,
-    },
+    { sender: "ai", text: "Oyuna başlamak için bir seçim yap." },
   ])
+
   const [input, setInput] = useState("")
   const [isThinking, setIsThinking] = useState(false)
   const [health, setHealth] = useState(85)
   const [energy, setEnergy] = useState(60)
   const [saveMessage, setSaveMessage] = useState("")
 
-  const currentScene = scenes[sceneIndex]
-
-  const getDifficultyDamage = () => {
-    if (selectedDifficulty.id === "easy") {
-      return {
-        healthChange: -2,
-        energyChange: -4,
-      }
-    }
-
-    if (selectedDifficulty.id === "hard") {
-      return {
-        healthChange: -9,
-        energyChange: -12,
-      }
-    }
-
-    return {
-      healthChange: -5,
-      energyChange: -8,
-    }
-  }
-
-  const getNarrationPrefix = () => {
-    if (selectedNarration.id === "fast") {
-      return "Hızlıca karar verdin."
-    }
-
-    if (selectedNarration.id === "detailed") {
-      return "Bu kararın çevrendeki atmosferi değiştiriyor ve hikâyenin yönünü belirgin şekilde etkiliyor."
-    }
-
-    return "Sahne sinematik bir şekilde değişiyor."
+  const showSaveMessage = (text) => {
+    setSaveMessage(text)
+    setTimeout(() => setSaveMessage(""), 2200)
   }
 
   const startGame = () => {
-    setIsGameStarted(true)
-    setSceneIndex(0)
-    setHealth(selectedDifficulty.id === "hard" ? 70 : 85)
-    setEnergy(selectedDifficulty.id === "hard" ? 50 : 60)
-    setInput("")
-    setIsThinking(false)
-    setSaveMessage("")
+    const startingHealth = selectedDifficulty.id === "hard" ? 70 : 85
+    const startingEnergy = selectedDifficulty.id === "hard" ? 50 : 60
+
+    setHealth(startingHealth)
+    setEnergy(startingEnergy)
+    setCurrentScene({
+      ...initialScene,
+      title: `${selectedMode.title} Macerası`,
+      description: `${selectedMode.description} İlk kararın hikâyeyi başlatacak.`,
+    })
     setMessages([
       {
         sender: "ai",
-        text: `${selectedMode.title} modunda oyun başladı. ${scenes[0].aiText}`,
+        text: `${selectedMode.title} modunda oyun başladı. İlk hamleni seç.`,
       },
     ])
+    setInput("")
+    setIsThinking(false)
+    setIsGameStarted(true)
   }
 
   const returnToMenu = () => {
@@ -187,39 +96,66 @@ function App() {
     setSaveMessage("")
   }
 
-  const generateAIResponse = (userAction) => {
-    const nextIndex = (sceneIndex + 1) % scenes.length
-    const nextScene = scenes[nextIndex]
-    const difficultyDamage = getDifficultyDamage()
-    const narrationPrefix = getNarrationPrefix()
+  const callAI = async (actionText) => {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: actionText,
+        mode: selectedMode.title,
+        difficulty: selectedDifficulty.title,
+        narrationStyle: selectedNarration.title,
+        currentScene,
+        health,
+        energy,
+        recentMessages: messages.slice(-6),
+      }),
+    })
 
+    const data = await response.json()
+
+    if (!response.ok || data.error) {
+      throw new Error(data.error || "AI servisinden cevap alınamadı.")
+    }
+
+    return data
+  }
+
+  const normalizeAIData = (data) => {
     return {
-      nextIndex,
-      aiMessage: `${narrationPrefix} "${userAction}" seçimini yaptın. ${nextScene.aiText}`,
-      healthChange: difficultyDamage.healthChange,
-      energyChange: difficultyDamage.energyChange,
+      scene: {
+        title: data.scene?.title || currentScene.title,
+        chapter: data.scene?.chapter || currentScene.chapter,
+        description: data.scene?.description || currentScene.description,
+        image: data.scene?.imageUrl || currentScene.image,
+        location: data.stats?.location || currentScene.location,
+        mission: data.stats?.mission || currentScene.mission,
+        choices:
+          Array.isArray(data.choices) && data.choices.length > 0
+            ? data.choices
+            : currentScene.choices,
+      },
+      aiMessage: data.aiMessage || "Hikâye devam ediyor.",
+      healthChange: Number(data.stats?.healthChange || 0),
+      energyChange: Number(data.stats?.energyChange || 0),
     }
   }
 
-  const handleAction = (actionText) => {
+  const handleAction = async (actionText) => {
     if (isThinking) return
 
-    setMessages((prev) => [
-      ...prev,
-      {
-        sender: "user",
-        text: actionText,
-      },
-    ])
-
+    setMessages((prev) => [...prev, { sender: "user", text: actionText }])
     setIsThinking(true)
 
-    setTimeout(() => {
-      const result = generateAIResponse(actionText)
+    try {
+      const aiData = await callAI(actionText)
+      const result = normalizeAIData(aiData)
 
-      setSceneIndex(result.nextIndex)
-      setHealth((prev) => Math.max(0, prev + result.healthChange))
-      setEnergy((prev) => Math.max(0, prev + result.energyChange))
+      setCurrentScene(result.scene)
+      setHealth((prev) => Math.max(0, Math.min(100, prev + result.healthChange)))
+      setEnergy((prev) => Math.max(0, Math.min(100, prev + result.energyChange)))
 
       setMessages((prev) => [
         ...prev,
@@ -228,33 +164,29 @@ function App() {
           text: result.aiMessage,
         },
       ])
-
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "ai",
+          text: `AI bağlantısında hata oluştu: ${error.message}`,
+        },
+      ])
+    } finally {
       setIsThinking(false)
-    }, 1200)
+    }
   }
 
   const handleSendMessage = () => {
     const trimmedInput = input.trim()
-
     if (!trimmedInput) return
 
-    handleAction(trimmedInput)
     setInput("")
+    handleAction(trimmedInput)
   }
 
   const handleNewGame = () => {
-    setSceneIndex(0)
-    setHealth(selectedDifficulty.id === "hard" ? 70 : 85)
-    setEnergy(selectedDifficulty.id === "hard" ? 50 : 60)
-    setInput("")
-    setIsThinking(false)
-    setSaveMessage("")
-    setMessages([
-      {
-        sender: "ai",
-        text: `${selectedMode.title} modunda yeni oyun başladı. ${scenes[0].aiText}`,
-      },
-    ])
+    startGame()
   }
 
   const handleSaveGame = () => {
@@ -262,30 +194,21 @@ function App() {
       selectedMode,
       selectedDifficulty,
       selectedNarration,
-      sceneIndex,
+      currentScene,
       messages,
       health,
       energy,
     }
 
     localStorage.setItem("aiStoryQuestSave", JSON.stringify(saveData))
-    setSaveMessage("Oyun kaydedildi.")
-
-    setTimeout(() => {
-      setSaveMessage("")
-    }, 2000)
+    showSaveMessage("Oyun kaydedildi.")
   }
 
   const handleLoadGame = () => {
     const savedData = localStorage.getItem("aiStoryQuestSave")
 
     if (!savedData) {
-      setSaveMessage("Kayıt bulunamadı.")
-
-      setTimeout(() => {
-        setSaveMessage("")
-      }, 2000)
-
+      showSaveMessage("Kayıt bulunamadı.")
       return
     }
 
@@ -294,28 +217,24 @@ function App() {
     setSelectedMode(parsedData.selectedMode)
     setSelectedDifficulty(parsedData.selectedDifficulty)
     setSelectedNarration(parsedData.selectedNarration)
-    setSceneIndex(parsedData.sceneIndex)
+    setCurrentScene(parsedData.currentScene)
     setMessages(parsedData.messages)
     setHealth(parsedData.health)
     setEnergy(parsedData.energy)
     setIsGameStarted(true)
-    setSaveMessage("Kayıt yüklendi.")
 
-    setTimeout(() => {
-      setSaveMessage("")
-    }, 2000)
+    showSaveMessage("Kayıt yüklendi.")
   }
 
   if (!isGameStarted) {
     return (
-      <div className="start-screen">
-        <div className="start-background-glow"></div>
+      <main className="app start-screen">
+        <div className="start-background-glow" />
 
-        <div className="start-container">
+        <section className="start-container">
           <div className="start-hero">
             <div className="brand large-brand">
               <div className="brand-icon">✦</div>
-
               <div>
                 <div className="logo">AI Story Quest</div>
                 <div className="tagline">Yapay Zeka Destekli Hikâye Oyunu</div>
@@ -325,9 +244,8 @@ function App() {
             <h1>Kendi hikâyeni seç, yapay zekâ dünyayı oluştursun.</h1>
 
             <p>
-              Oyun başlamadan önce hikâye tarzını, zorluk seviyesini ve AI anlatım
-              biçimini belirle. Seçimlerin oyun akışını, risk seviyesini ve anlatıcı
-              dilini etkiler.
+              Hikâye tarzını, zorluk seviyesini ve anlatım biçimini belirle.
+              Seçimlerin AI tarafından yorumlanır ve oyun akışı dinamik olarak değişir.
             </p>
 
             <div className="start-summary">
@@ -335,12 +253,10 @@ function App() {
                 <span>Hikâye</span>
                 <strong>{selectedMode.title}</strong>
               </div>
-
               <div>
                 <span>Zorluk</span>
                 <strong>{selectedDifficulty.title}</strong>
               </div>
-
               <div>
                 <span>Anlatım</span>
                 <strong>{selectedNarration.title}</strong>
@@ -420,7 +336,6 @@ function App() {
               <button className="start-button" onClick={startGame}>
                 Oyuna Başla
               </button>
-
               <button className="load-button" onClick={handleLoadGame}>
                 Kayıttan Devam Et
               </button>
@@ -428,29 +343,28 @@ function App() {
 
             {saveMessage && <div className="menu-message">{saveMessage}</div>}
           </div>
-        </div>
-      </div>
+        </section>
+      </main>
     )
   }
 
   return (
-    <div className="app">
-      <header className="navbar">
+    <main className="app">
+      <nav className="navbar">
         <div className="brand">
           <div className="brand-icon">✦</div>
-
           <div>
             <div className="logo">AI Story Quest</div>
             <div className="tagline">Yapay Zeka Destekli Hikâye Oyunu</div>
           </div>
         </div>
 
-        <nav className="nav-menu">
-          <a href="#">Oyun</a>
-          <a href="#">Senaryo</a>
-          <a href="#">Karakter</a>
-          <a href="#">Galeri</a>
-        </nav>
+        <div className="nav-menu">
+          <a href="#oyun">Oyun</a>
+          <a href="#senaryo">Senaryo</a>
+          <a href="#karakter">Karakter</a>
+          <a href="#galeri">Galeri</a>
+        </div>
 
         <div className="nav-actions">
           <button onClick={handleNewGame}>Yeni Oyun</button>
@@ -458,13 +372,12 @@ function App() {
           <button onClick={handleLoadGame}>Yükle</button>
           <button onClick={returnToMenu}>Menüye Dön</button>
         </div>
-      </header>
+      </nav>
 
-      <main className="game-container">
-        <section className="scene-section">
+      <section className="game-container" id="oyun">
+        <div className="scene-section">
           <div className="scene-image">
             <img src={currentScene.image} alt={currentScene.title} />
-
             <div className="scene-overlay">
               <span>{currentScene.chapter}</span>
               <h1>{currentScene.title}</h1>
@@ -477,34 +390,29 @@ function App() {
               <span>Can</span>
               <strong>{health}</strong>
             </div>
-
             <div>
               <span>Enerji</span>
               <strong>{energy}</strong>
             </div>
-
             <div>
               <span>Konum</span>
               <strong>{currentScene.location}</strong>
             </div>
-
             <div>
               <span>Görev</span>
               <strong>{currentScene.mission}</strong>
             </div>
           </div>
 
-          <div className="character-panel">
+          <div className="character-panel" id="karakter">
             <div>
               <span>Karakter</span>
               <strong>Gezgin Arda</strong>
             </div>
-
             <div>
               <span>Oyun Modu</span>
               <strong>{selectedMode.title}</strong>
             </div>
-
             <div>
               <span>Zorluk / Anlatım</span>
               <strong>
@@ -512,16 +420,15 @@ function App() {
               </strong>
             </div>
           </div>
-        </section>
+        </div>
 
-        <aside className="chat-section">
+        <aside className="chat-section" id="senaryo">
           <div className="chat-header">
             <div>
               <h2>AI Anlatıcı</h2>
               <p>Hikâyeyi seçimlerinle yönlendir</p>
             </div>
-
-            <span className="online-dot"></span>
+            <div className="online-dot" />
           </div>
 
           {saveMessage && <div className="save-message">{saveMessage}</div>}
@@ -559,9 +466,8 @@ function App() {
 
           <div className="chat-input">
             <input
-              type="text"
-              placeholder="Kendi hamleni yaz..."
               value={input}
+              placeholder="Kendi hamleni yaz..."
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
@@ -570,14 +476,13 @@ function App() {
               }}
               disabled={isThinking}
             />
-
             <button onClick={handleSendMessage} disabled={isThinking}>
               Gönder
             </button>
           </div>
         </aside>
-      </main>
-    </div>
+      </section>
+    </main>
   )
 }
 
