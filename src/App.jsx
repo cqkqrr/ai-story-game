@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import "./index.css"
 
 const API_URL = "http://127.0.0.1:5000/api/story/next"
@@ -52,6 +52,8 @@ function App() {
   const [selectedMode, setSelectedMode] = useState(gameModes[0])
   const [selectedDifficulty, setSelectedDifficulty] = useState(difficulties[1])
   const [selectedNarration, setSelectedNarration] = useState(narrationStyles[0])
+  const [customScenarioOpen, setCustomScenarioOpen] = useState(false)
+  const [customScenario, setCustomScenario] = useState("")
 
   const [currentScene, setCurrentScene] = useState(initialScene)
   const [messages, setMessages] = useState([
@@ -64,12 +66,57 @@ function App() {
   const [energy, setEnergy] = useState(60)
   const [saveMessage, setSaveMessage] = useState("")
 
+  const chatMessagesRef = useRef(null)
+
+  useEffect(() => {
+    if (chatMessagesRef.current) {
+      chatMessagesRef.current.scrollTo({
+        top: chatMessagesRef.current.scrollHeight,
+        behavior: "smooth",
+      })
+    }
+  }, [messages, isThinking])
+
+  const getActiveScenario = () => {
+    const trimmedScenario = customScenario.trim()
+
+    if (selectedMode.id === "custom" && trimmedScenario) {
+      return {
+        id: "custom",
+        title: "Özel Senaryo",
+        description: trimmedScenario,
+        icon: "➕",
+      }
+    }
+
+    return selectedMode
+  }
+
+  const selectDefaultMode = (mode) => {
+    setSelectedMode(mode)
+    setCustomScenarioOpen(false)
+  }
+
+  const selectCustomScenario = () => {
+    const trimmedScenario = customScenario.trim()
+
+    setSelectedMode({
+      id: "custom",
+      title: "Özel Senaryo",
+      description: trimmedScenario || "Oyuncunun kendi yazdığı özel hikâye evreni.",
+      icon: "➕",
+    })
+
+    setCustomScenarioOpen(true)
+  }
+
   const showSaveMessage = (text) => {
     setSaveMessage(text)
     setTimeout(() => setSaveMessage(""), 2200)
   }
 
   const startGame = () => {
+    const activeScenario = getActiveScenario()
     const startingHealth = selectedDifficulty.id === "hard" ? 70 : 85
     const startingEnergy = selectedDifficulty.id === "hard" ? 50 : 60
 
@@ -77,13 +124,13 @@ function App() {
     setEnergy(startingEnergy)
     setCurrentScene({
       ...initialScene,
-      title: `${selectedMode.title} Macerası`,
-      description: `${selectedMode.description} İlk kararın hikâyeyi başlatacak.`,
+      title: `${activeScenario.title} Macerası`,
+      description: `${activeScenario.description} İlk kararın hikâyeyi başlatacak.`,
     })
     setMessages([
       {
         sender: "ai",
-        text: `${selectedMode.title} modunda oyun başladı. İlk hamleni seç.`,
+        text: `${activeScenario.title} modunda oyun başladı. İlk hamleni seç.`,
       },
     ])
     setInput("")
@@ -97,6 +144,8 @@ function App() {
   }
 
   const callAI = async (actionText) => {
+    const activeScenario = getActiveScenario()
+
     const response = await fetch(API_URL, {
       method: "POST",
       headers: {
@@ -104,7 +153,8 @@ function App() {
       },
       body: JSON.stringify({
         action: actionText,
-        mode: selectedMode.title,
+        mode: activeScenario.title,
+        customScenario: activeScenario.description,
         difficulty: selectedDifficulty.title,
         narrationStyle: selectedNarration.title,
         currentScene,
@@ -194,6 +244,8 @@ function App() {
       selectedMode,
       selectedDifficulty,
       selectedNarration,
+      customScenario,
+      customScenarioOpen,
       currentScene,
       messages,
       health,
@@ -217,6 +269,8 @@ function App() {
     setSelectedMode(parsedData.selectedMode)
     setSelectedDifficulty(parsedData.selectedDifficulty)
     setSelectedNarration(parsedData.selectedNarration)
+    setCustomScenario(parsedData.customScenario || "")
+    setCustomScenarioOpen(parsedData.customScenarioOpen || false)
     setCurrentScene(parsedData.currentScene)
     setMessages(parsedData.messages)
     setHealth(parsedData.health)
@@ -225,6 +279,8 @@ function App() {
 
     showSaveMessage("Kayıt yüklendi.")
   }
+
+  const activeScenario = getActiveScenario()
 
   if (!isGameStarted) {
     return (
@@ -251,7 +307,7 @@ function App() {
             <div className="start-summary">
               <div>
                 <span>Hikâye</span>
-                <strong>{selectedMode.title}</strong>
+                <strong>{activeScenario.title}</strong>
               </div>
               <div>
                 <span>Zorluk</span>
@@ -278,14 +334,46 @@ function App() {
                     className={`setup-card ${
                       selectedMode.id === mode.id ? "active" : ""
                     }`}
-                    onClick={() => setSelectedMode(mode)}
+                    onClick={() => selectDefaultMode(mode)}
                   >
                     <div className="setup-icon">{mode.icon}</div>
                     <strong>{mode.title}</strong>
                     <p>{mode.description}</p>
                   </button>
                 ))}
+
+                <button
+                  className={`setup-card custom-scenario-card ${
+                    selectedMode.id === "custom" ? "active" : ""
+                  }`}
+                  onClick={selectCustomScenario}
+                >
+                  <div className="setup-icon">＋</div>
+                  <strong>Kendi Senaryonu Yaz</strong>
+                  <p>İstediğin evreni, karakterleri ve başlangıç olayını sen belirle.</p>
+                </button>
               </div>
+
+              {customScenarioOpen && (
+                <div className="custom-scenario-box">
+                  <label>Kendi senaryon</label>
+                  <textarea
+                    value={customScenario}
+                    placeholder="Örn: Oyuncu, terk edilmiş bir uzay gemisinde uyanır. Geminin yapay zekâsı bozulmuştur ve her kapının arkasında farklı bir zaman kırılması vardır..."
+                    onChange={(event) => {
+                      setCustomScenario(event.target.value)
+                      setSelectedMode({
+                        id: "custom",
+                        title: "Özel Senaryo",
+                        description:
+                          event.target.value.trim() ||
+                          "Oyuncunun kendi yazdığı özel hikâye evreni.",
+                        icon: "➕",
+                      })
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="setup-section">
@@ -361,7 +449,6 @@ function App() {
 
         <div className="nav-menu">
           <a href="#oyun">Oyun</a>
-          <a href="#senaryo">Senaryo</a>
           <a href="#karakter">Karakter</a>
           <a href="#galeri">Galeri</a>
         </div>
@@ -411,7 +498,7 @@ function App() {
             </div>
             <div>
               <span>Oyun Modu</span>
-              <strong>{selectedMode.title}</strong>
+              <strong>{activeScenario.title}</strong>
             </div>
             <div>
               <span>Zorluk / Anlatım</span>
@@ -422,7 +509,7 @@ function App() {
           </div>
         </div>
 
-        <aside className="chat-section" id="senaryo">
+        <aside className="chat-section">
           <div className="chat-header">
             <div>
               <h2>AI Anlatıcı</h2>
@@ -433,7 +520,7 @@ function App() {
 
           {saveMessage && <div className="save-message">{saveMessage}</div>}
 
-          <div className="chat-messages">
+          <div className="chat-messages" ref={chatMessagesRef}>
             {messages.map((message, index) => (
               <div
                 key={`${message.sender}-${index}`}

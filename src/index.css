@@ -697,3 +697,93 @@ input:disabled {
     font-size: 40px;
   }
 }
+.game-container {
+  grid-template-columns: minmax(0, 1fr) 390px;
+  gap: 28px;
+}
+
+.chat-section {
+  max-width: 390px;
+}
+
+.chat-header h2 {
+  font-size: 28px;
+}
+
+.chat-header p {
+  font-size: 15px;
+}
+
+.chat-messages {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.message {
+  font-size: 14px;
+}
+
+.choices button {
+  font-size: 14px;
+  padding: 14px 16px;
+}
+
+.chat-input input {
+  font-size: 14px;
+}
+
+.chat-input button {
+  font-size: 14px;
+}
+
+.custom-scenario-card {
+  border-style: dashed;
+}
+
+.custom-scenario-box {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid rgba(132, 111, 255, 0.35);
+  border-radius: 22px;
+  background: rgba(15, 23, 42, 0.65);
+}
+
+.custom-scenario-box label {
+  display: block;
+  margin-bottom: 10px;
+  color: #cbd5e1;
+  font-weight: 700;
+}
+
+.custom-scenario-box textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 16px;
+  outline: none;
+  padding: 14px 16px;
+  background: rgba(2, 6, 23, 0.75);
+  color: #f8fafc;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.custom-scenario-box textarea::placeholder {
+  color: #64748b;
+}
+
+.custom-scenario-box textarea:focus {
+  border-color: rgba(124, 92, 255, 0.85);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.15);
+}
+
+@media (max-width: 1100px) {
+  .game-container {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-section {
+    max-width: none;
+  }
+}
