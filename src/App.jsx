@@ -44,7 +44,20 @@ const initialScene = {
   image: "https://images.unsplash.com/photo-1518709268805-4e9042af2176",
   location: "Başlangıç",
   mission: "İlk hamleni yap",
-  choices: ["Etrafıma bakın", "İleri doğru yürüyün", "Çantamı kontrol edin"],
+  choices: [
+    {
+      text: "Etrafıma bakın",
+      clue: "Güvenli başlangıç hamlesi.",
+    },
+    {
+      text: "İleri doğru yürüyün",
+      clue: "Risk orta seviyede.",
+    },
+    {
+      text: "Çantamı kontrol edin",
+      clue: "",
+    },
+  ],
 }
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -227,6 +240,26 @@ function App() {
     return data
   }
 
+  const normalizeChoices = (choices) => {
+    if (!Array.isArray(choices) || choices.length === 0) {
+      return currentScene.choices
+    }
+
+    return choices.map((choice) => {
+      if (typeof choice === "string") {
+        return {
+          text: choice,
+          clue: "",
+        }
+      }
+
+      return {
+        text: choice.text || choice.label || "Devam et",
+        clue: choice.clue || choice.hint || "",
+      }
+    })
+  }
+
   const normalizeAIData = (data) => {
     return {
       scene: {
@@ -236,10 +269,7 @@ function App() {
         image: data.scene?.imageUrl || data.scene?.image || currentScene.image,
         location: data.stats?.location || currentScene.location,
         mission: data.stats?.mission || currentScene.mission,
-        choices:
-          Array.isArray(data.choices) && data.choices.length > 0
-            ? data.choices
-            : currentScene.choices,
+        choices: normalizeChoices(data.choices),
       },
       aiMessage: data.aiMessage || "Hikâye devam ediyor.",
       healthChange: Number(data.stats?.healthChange || 0),
@@ -338,7 +368,7 @@ function App() {
       type: "d20",
       roll,
       result,
-     difficulty: selectedDifficulty.id,
+      difficulty: selectedDifficulty.id,
     })
   }
 
@@ -449,9 +479,8 @@ function App() {
                 {gameModes.map((mode) => (
                   <button
                     key={mode.id}
-                    className={`setup-card ${
-                      selectedMode.id === mode.id ? "active" : ""
-                    }`}
+                    className={`setup-card ${selectedMode.id === mode.id ? "active" : ""
+                      }`}
                     onClick={() => selectDefaultMode(mode)}
                   >
                     <div className="setup-icon">{mode.icon}</div>
@@ -461,9 +490,8 @@ function App() {
                 ))}
 
                 <button
-                  className={`setup-card custom-scenario-card ${
-                    selectedMode.id === "custom" ? "active" : ""
-                  }`}
+                  className={`setup-card custom-scenario-card ${selectedMode.id === "custom" ? "active" : ""
+                    }`}
                   onClick={selectCustomScenario}
                 >
                   <div className="setup-icon">＋</div>
@@ -504,9 +532,8 @@ function App() {
                 {difficulties.map((difficulty) => (
                   <button
                     key={difficulty.id}
-                    className={`setup-card ${
-                      selectedDifficulty.id === difficulty.id ? "active" : ""
-                    }`}
+                    className={`setup-card ${selectedDifficulty.id === difficulty.id ? "active" : ""
+                      }`}
                     onClick={() => setSelectedDifficulty(difficulty)}
                   >
                     <strong>{difficulty.title}</strong>
@@ -526,9 +553,8 @@ function App() {
                 {narrationStyles.map((style) => (
                   <button
                     key={style.id}
-                    className={`setup-card ${
-                      selectedNarration.id === style.id ? "active" : ""
-                    }`}
+                    className={`setup-card ${selectedNarration.id === style.id ? "active" : ""
+                      }`}
                     onClick={() => setSelectedNarration(style)}
                   >
                     <strong>{style.title}</strong>
@@ -585,9 +611,8 @@ function App() {
             <img
               src={displayedImage}
               alt={currentScene.title}
-              className={`scene-main-image ${
-                isImageLoading ? "scene-loading" : "scene-loaded"
-              }`}
+              className={`scene-main-image ${isImageLoading ? "scene-loading" : "scene-loaded"
+                }`}
             />
 
             {isImageLoading && (
@@ -655,9 +680,8 @@ function App() {
             {messages.map((message, index) => (
               <div
                 key={`${message.sender}-${index}`}
-                className={`message ${
-                  message.sender === "ai" ? "ai-message" : "user-message"
-                }`}
+                className={`message ${message.sender === "ai" ? "ai-message" : "user-message"
+                  }`}
               >
                 {message.text}
               </div>
@@ -690,15 +714,25 @@ function App() {
           </div>
 
           <div className="choices">
-            {currentScene.choices.map((choice) => (
-              <button
-                key={choice}
-                onClick={() => handleDiceRoll(choice)}
-                disabled={isThinking || isRollingDice}
-              >
-                {choice}
-              </button>
-            ))}
+            {currentScene.choices.map((choice, index) => {
+              const choiceText = typeof choice === "string" ? choice : choice.text
+              const choiceClue = typeof choice === "string" ? "" : choice.clue
+
+              return (
+                <button
+                  key={`${choiceText}-${index}`}
+                  onClick={() => handleDiceRoll(choiceText)}
+                  disabled={isThinking || isRollingDice}
+                  className="choice-button"
+                >
+                  <span className="choice-text">{choiceText}</span>
+
+                  {choiceClue && (
+                    <span className="choice-clue">{choiceClue}</span>
+                  )}
+                </button>
+              )
+            })}
           </div>
 
           <div className="chat-input">
