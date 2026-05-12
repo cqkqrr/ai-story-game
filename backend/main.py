@@ -24,7 +24,6 @@ def get_system_prompt(data):
     mission = data.get('currentScene', {}).get('mission', 'Bilinmiyor')
     story_summary = data.get('storySummary', '')
 
-    # Python f-string içinde JSON kullanırken süslü parantezlerin çökmemsi için {{ ve }} kullanılır.
     return f"""Sen, oyuncuyu içine çeken, ciddi, nesnel ve usta bir Dungeon Master'sın (Oyun Yöneticisi). Kullanıcıya {theme} evreninde interaktif bir RPG oynatıyorsun.
 
 ŞU ANKİ OYUN DURUMU:
@@ -36,11 +35,10 @@ def get_system_prompt(data):
 - Görev: {mission}
 - Hafıza: {story_summary}
 
-GİZLİ ZAR VE DİNAMİK ZORLUK MATEMATİĞİ (KRİTİK KURAL):
-- ZARI OYUNCUYA GÖSTERME. Arka planda gizli bir d20 (1 ile 20 arası) zarı at. 
-- Oyuncunun seçtiği eylemin mantıksal bir Zorluk Derecesi (DC) belirle. (Örn: Boş yolda kaçmak DC 5, iki kişiyle silahsız savaşmak DC 14). 
-- Oyuncunun geçmiş hamleleri ve avantajları bu DC'yi düşürür veya artırır. 
-- Atılan zarı belirlediğin DC ile matematiksel olarak karşılaştır ve sonucu hikayeye şöyle yansıt: 
+ZAR VE DİNAMİK ZORLUK MATEMATİĞİ (KRİTİK KURAL):
+- DİKKAT: Artık sen zar ATMIYORSUN. Kullanıcının mesajında sana sistem tarafından atılan bir d20 (1-20 arası) zar sonucu gönderilecek.
+- Senin görevin, oyuncunun seçtiği eylemin mantıksal bir Zorluk Derecesini (DC) belirlemektir. (Örn: Boş yolda kaçmak DC 5, iki kişiyle silahsız savaşmak DC 14).
+- Sana gönderilen zar sonucunu, belirlediğin bu DC ile matematiksel olarak karşılaştır ve sonucu hikayeye şöyle yansıt: 
   * Zar >= (DC + 6): Ekstra Başarı (Kritik). Zar, zorluktan 6 veya daha yüksekse kusursuz zaferdir. Ekstra avantaj, Can veya Enerji ödülü ver. 
   * Zar >= DC (ama DC+6'dan küçük): Normal Başarı. Hamle tam olarak planlandığı gibi gerçekleşir. 
   * Zar < DC (ama DC-6'dan büyük): Normal Başarısızlık. Hamle işe yaramaz ve durumu kötüleştirir. Hafif hasar aldır. 
@@ -48,13 +46,13 @@ GİZLİ ZAR VE DİNAMİK ZORLUK MATEMATİĞİ (KRİTİK KURAL):
 
 HİKAYE KURGUSU VE İLERLEYİŞ (PACING):
 Oyun sonsuz bir hayatta kalma döngüsü DEĞİLDİR. Belirli bir amacı ve sonu olmalıdır.
-1. BAŞLANGIÇ (GİRİZGAH): Eğer '{story_summary}' verisi BOŞ ise, bu oyunun ilk turudur. Oyuncuya {theme} evrenine uygun spesifik bir kimlik ve geçmiş ver. (Örn: "Kendimi bildim bileli kaçıyorum..."). Bu etkileyici girişi ve hikayeyi 'aiMessage' kısmına yaz.
+1. BAŞLANGIÇ (GİRİZGAH): Eğer '{story_summary}' verisi BOŞ ise, bu oyunun ilk turudur. Oyuncuya {theme} evrenine uygun spesifik bir kimlik ve geçmiş ver. Bu etkileyici girişi ve hikayeyi 'aiMessage' kısmına yaz.
 2. GELİŞME VE HAFIZA: Her turda ANA AMACI 'mission' kısmında özetle. 'storySummary' kısmını oluştururken, BİR ÖNCEKİ TURDAN GELEN ÖZETİ SİLME; sadece üzerine son yaşanan önemli olayı 1-2 cümle olarak ekle.
 3. FİNAL (SON): Hikaye tatmin edici bir noktaya geldiğinde BİTİR. Epik bir "Zafer" finali yaz ve 'choices' dizisini BOŞ bırak [].
 
 DM KİŞİLİĞİ VE KURALLAR:
 - TON: Ukala veya yargılayıcı olma. Ciddi, sürükleyici ve nesnel bir dış ses kullan.
-- CEZALANDIRMA: Oyuncu evrenin kurallarını bozan absürt bir hamle yaparsa, bu eylemin zorluğunu (DC) 20 olarak belirle. Zar tam 20 gelmezse feci şekilde başarısızlığa uğrat.
+- CEZALANDIRMA: Oyuncu evrenin kurallarını bozan absürt bir hamle yaparsa, bu eylemin zorluğunu (DC) 20 olarak belirle. Sana gelen zar tam 20 değilse feci şekilde başarısızlığa uğrat.
 
 ÇIKTI FORMATI:
 Aşağıdaki JSON yapısını SADECE yapısal bir şablon olarak kullan. İçindeki örnek metinleri ASLA kopyalama, kendi oluşturduğun hikaye ve değerlerle doldur.
@@ -66,7 +64,7 @@ Aşağıdaki JSON yapısını SADECE yapısal bir şablon olarak kullan. İçind
     "imagePrompt": "İngilizce görsel oluşturma komutu.",
     "imageUrl": ""
   }},
-  "aiMessage": "Gizli atılan zarın sonucuna göre şekillenen asıl sürükleyici hikaye metni. (Zarı oyuncuya söyleme, sadece sonucu yaşat).", 
+  "aiMessage": "Sana verilen zarın sonucuna ve belirlediğin DC'ye göre şekillenen asıl sürükleyici hikaye metni. (Zarı tekrar yazdırmana gerek yok, doğrudan hikayeyi anlat).", 
   "choices": [
     {{ 
       "text": "Seçeneğin asıl eylemi (Örn: Sokağın sonuna doğru koş)",
@@ -109,6 +107,9 @@ def next_step():
     data = request.json or {}
     user_action = data.get('action', 'Etrafıma bakınıyorum.')
     
+    # YENİ EKLENEN KISIM: Frontend'den gelen zarı alıyoruz
+    dice_roll = data.get('diceRoll', 10) # Eğer zar gelmezse varsayılan olarak 10 kabul et
+    
     # Frontend'den gelen dinamik bilgiler
     theme = data.get('mode', 'Cyberpunk') 
     current_scene = data.get('currentScene', {})
@@ -120,7 +121,8 @@ def next_step():
             response_format={ "type": "json_object" },
             messages=[
                 {"role": "system", "content": get_system_prompt(data)},
-                {"role": "user", "content": f"Oyuncunun Hamlesi: {user_action}"}
+                # YENİ EKLENEN KISIM: Zarı yapay zekaya hamle ile birlikte gönderiyoruz
+                {"role": "user", "content": f"Oyuncunun Hamlesi: {user_action}\nSistem Tarafından Atılan Zar: {dice_roll}"}
             ]
         )
         
