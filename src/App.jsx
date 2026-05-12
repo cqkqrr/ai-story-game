@@ -51,12 +51,38 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const rollD20 = () => Math.floor(Math.random() * 20) + 1
 
-const getDiceResult = (roll) => {
+const getDiceResult = (roll, difficultyId) => {
   if (roll === 1) return "Kritik Başarısızlık"
   if (roll === 20) return "Kritik Başarı"
-  if (roll >= 15) return "Başarılı"
-  if (roll >= 8) return "Kısmi Başarı"
+
+  if (difficultyId === "easy") {
+    if (roll >= 5) return "Başarılı"
+    return "Başarısız"
+  }
+
+  if (difficultyId === "hard") {
+    if (roll >= 15) return "Mükemmel Başarı"
+    if (roll >= 10) return "Kısmi Başarı"
+    return "Yetersiz Hamle"
+  }
+
+  if (roll >= 8) return "Başarılı"
   return "Başarısız"
+}
+
+const preloadSceneImage = (imageUrl) => {
+  return new Promise((resolve, reject) => {
+    if (!imageUrl) {
+      reject(new Error("Geçersiz görsel adresi."))
+      return
+    }
+
+    const image = new Image()
+    image.src = imageUrl
+
+    image.onload = () => resolve(imageUrl)
+    image.onerror = () => reject(new Error("Görsel yüklenemedi."))
+  })
 }
 
 function App() {
@@ -68,6 +94,9 @@ function App() {
   const [customScenario, setCustomScenario] = useState("")
 
   const [currentScene, setCurrentScene] = useState(initialScene)
+  const [displayedImage, setDisplayedImage] = useState(initialScene.image)
+  const [isImageLoading, setIsImageLoading] = useState(false)
+
   const [messages, setMessages] = useState([
     { sender: "ai", text: "Oyuna başlamak için bir seçim yap." },
   ])
@@ -135,19 +164,25 @@ function App() {
     const startingHealth = selectedDifficulty.id === "hard" ? 70 : 85
     const startingEnergy = selectedDifficulty.id === "hard" ? 50 : 60
 
-    setHealth(startingHealth)
-    setEnergy(startingEnergy)
-    setCurrentScene({
+    const startingScene = {
       ...initialScene,
       title: `${activeScenario.title} Macerası`,
       description: `${activeScenario.description} İlk kararın hikâyeyi başlatacak.`,
-    })
+    }
+
+    setHealth(startingHealth)
+    setEnergy(startingEnergy)
+    setCurrentScene(startingScene)
+    setDisplayedImage(startingScene.image)
+    setIsImageLoading(false)
+
     setMessages([
       {
         sender: "ai",
         text: `${activeScenario.title} modunda oyun başladı. İlk hamleni seç.`,
       },
     ])
+
     setInput("")
     setIsThinking(false)
     setIsRollingDice(false)
@@ -198,7 +233,7 @@ function App() {
         title: data.scene?.title || currentScene.title,
         chapter: data.scene?.chapter || currentScene.chapter,
         description: data.scene?.description || currentScene.description,
-        image: data.scene?.imageUrl || currentScene.image,
+        image: data.scene?.imageUrl || data.scene?.image || currentScene.image,
         location: data.stats?.location || currentScene.location,
         mission: data.stats?.mission || currentScene.mission,
         choices:
@@ -209,6 +244,28 @@ function App() {
       aiMessage: data.aiMessage || "Hikâye devam ediyor.",
       healthChange: Number(data.stats?.healthChange || 0),
       energyChange: Number(data.stats?.energyChange || 0),
+    }
+  }
+
+  const updateSceneWithPreloadedImage = async (nextScene) => {
+    const nextImage = nextScene.image || currentScene.image
+
+    if (nextImage === displayedImage) {
+      setCurrentScene(nextScene)
+      return
+    }
+
+    setIsImageLoading(true)
+
+    try {
+      await preloadSceneImage(nextImage)
+      setCurrentScene(nextScene)
+      setDisplayedImage(nextImage)
+    } catch (error) {
+      console.error("Image preload failed:", error)
+      setCurrentScene(nextScene)
+    } finally {
+      setIsImageLoading(false)
     }
   }
 
@@ -231,7 +288,8 @@ function App() {
       const aiData = await callAI(actionText, diceData)
       const normalizedData = normalizeAIData(aiData)
 
-      setCurrentScene(normalizedData.scene)
+      await updateSceneWithPreloadedImage(normalizedData.scene)
+
       setHealth((prev) => Math.max(0, Math.min(100, prev + normalizedData.healthChange)))
       setEnergy((prev) => Math.max(0, Math.min(100, prev + normalizedData.energyChange)))
 
@@ -261,7 +319,7 @@ function App() {
     if (isThinking || isRollingDice) return
 
     const roll = rollD20()
-    const result = getDiceResult(roll)
+    const result = getDiceResult(roll, selectedDifficulty.id)
 
     setDiceRoll(null)
     setDiceResult("")
@@ -280,6 +338,7 @@ function App() {
       type: "d20",
       roll,
       result,
+     difficulty: selectedDifficulty.id,
     })
   }
 
@@ -303,6 +362,7 @@ function App() {
       customScenario,
       customScenarioOpen,
       currentScene,
+      displayedImage,
       messages,
       health,
       energy,
@@ -328,9 +388,11 @@ function App() {
     setCustomScenario(parsedData.customScenario || "")
     setCustomScenarioOpen(parsedData.customScenarioOpen || false)
     setCurrentScene(parsedData.currentScene)
+    setDisplayedImage(parsedData.displayedImage || parsedData.currentScene?.image || initialScene.image)
     setMessages(parsedData.messages)
     setHealth(parsedData.health)
     setEnergy(parsedData.energy)
+    setIsImageLoading(false)
     setIsGameStarted(true)
 
     showSaveMessage("Kayıt yüklendi.")
@@ -520,7 +582,20 @@ function App() {
       <section className="game-container" id="oyun">
         <div className="scene-section">
           <div className="scene-image">
-            <img src={currentScene.image} alt={currentScene.title} />
+            <img
+              src={displayedImage}
+              alt={currentScene.title}
+              className={`scene-main-image ${
+                isImageLoading ? "scene-loading" : "scene-loaded"
+              }`}
+            />
+
+            {isImageLoading && (
+              <div className="scene-image-loading-badge">
+                Yeni sahne yükleniyor...
+              </div>
+            )}
+
             <div className="scene-overlay">
               <span>{currentScene.chapter}</span>
               <h1>{currentScene.title}</h1>
