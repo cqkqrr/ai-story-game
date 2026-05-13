@@ -5,7 +5,6 @@ import os
 import json
 from dotenv import load_dotenv
 
-# .env dosyasındaki API anahtarını yükler
 load_dotenv()
 
 app = Flask(__name__)
@@ -14,30 +13,35 @@ CORS(app)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def get_system_prompt(data):
-    # Frontend'den gelen anlık oyun verilerini alıyoruz
-    theme = data.get('mode', 'Cyberpunk')
-    difficulty = data.get('difficulty', 'Normal')
-    narration = data.get('narrationStyle', 'Akıcı')
+    theme = data.get('theme', 'fantasy')
+    
+    # DÜZELTME 1: React'ten gelen customScenario parametresini doğru yakalıyoruz
+    custom_scenario = data.get('customScenario', '') 
+    if theme == 'custom' or custom_scenario:
+        theme = f"Özel Senaryo: {custom_scenario}"
+    else:
+        theme = data.get('mode', 'Karanlık Fantastik') # Örn: "Karanlık Fantastik"
+
+    difficulty = data.get('difficultyTitle', 'Normal')
+    narration = data.get('narrationStyleTitle', 'Akıcı')
     health = data.get('health', 100)
     energy = data.get('energy', 100)
     location = data.get('currentScene', {}).get('location', 'Bilinmiyor')
     mission = data.get('currentScene', {}).get('mission', 'Bilinmiyor')
     
-    # Hafıza boş mu diye kontrol edip (strip ile boşlukları da siliyoruz) Python'da karar veriyoruz
     story_summary = data.get('storySummary', '').strip()
 
-    # YAPAY ZEKAYI ZORLAYACAK DİNAMİK KURAL SİSTEMİ
     if not story_summary:
         tur_kurali = f"""BAŞLANGIÇ (GİRİZGAH) KURALI - ÇOK KRİTİK:
-Bu oyunun İLK TURU! Oyuncunun kim olduğunu henüz bilmiyoruz. 
-'aiMessage' kısmına YAZMAYA BAŞLARKEN İLK İŞ OLARAK oyuncuya {theme} evrenine uygun spesifik bir kimlik, isim ve karanlık bir geçmiş ver. 
-Örn: "Ben, yıllardır bu karanlıkta saklanan eski bir..." tarzı destansı bir iç sesle başla, ardından oyuncunun yaptığı ilk hamlenin (ve zarın) sonucuna bağla."""
+Bu oyunun İLK TURU! 'loreMessage' kısmına ASLA "TODO" veya açıklama yazma! Doğrudan oyuncuya {theme} evrenine uygun spesifik bir kimlik, isim ve karanlık bir geçmiş UYDUR VE YAZ. 
+1. 'loreMessage' alanı: Buraya oyuncunun kim olduğunu, geçmişini ve {theme} evrenindeki amacını anlatan o destansı giriş hikayesini en az 6 cümle olacak şekilde yaz.
+2. 'aiMessage' alanı: Buraya ise karakterin ŞU AN bulunduğu mekanı, atılan zarın sonucunu ve olayı ilerletecek bir mesaj yaz (tehlikeli bir durum ilerlemesi gereken bir mekan veya alabileceği bir eşya vb.)."""
     else:
         tur_kurali = f"""GELİŞME VE HAFIZA KURALI:
-Bu oyunun devamıdır. Karakterin kimliğini zaten anlattın, tekrar anlatma. Doğrudan hamleye ve zara odaklan.
+Bu oyunun devamıdır. Karakterin kimliğini zaten anlattın. 'loreMessage' alanını KESİNLİKLE BOŞ ("") bırak.
 'storySummary' kısmını oluştururken, BİR ÖNCEKİ TURDAN GELEN ÖZETİ SİLME; sadece üzerine son yaşanan önemli olayı 1-2 cümle olarak ekle."""
 
-    return f"""Sen, oyuncuyu içine çeken, ciddi, nesnel ve usta bir Dungeon Master'sın (Oyun Yöneticisi). Kullanıcıya {theme} evreninde interaktif bir RPG oynatıyorsun.
+    return f"""Sen, oyuncuyu içine çeken, ciddi, nesnel ve usta bir Dungeon Master'sın. Kullanıcıya {theme} evreninde interaktif bir RPG oynatıyorsun.
 
 ŞU ANKİ OYUN DURUMU:
 - Evren: {theme} 
@@ -48,23 +52,33 @@ Bu oyunun devamıdır. Karakterin kimliğini zaten anlattın, tekrar anlatma. Do
 - Görev: {mission}
 - Hafıza: {story_summary if story_summary else 'HENÜZ HİÇBİR ŞEY YAŞANMADI.'}
 
-ZAR VE DİNAMİK ZORLUK MATEMATİĞİ (KRİTİK KURAL):
-- DİKKAT: Artık sen zar ATMIYORSUN. Kullanıcının mesajında sana sistem tarafından atılan bir d20 (1-20 arası) zar sonucu gönderilecek.
-- Senin görevin, oyuncunun seçtiği eylemin mantıksal bir Zorluk Derecesini (DC) belirlemektir. (Örn: Boş yolda kaçmak DC 5, savaşmak DC 14).
-- Sana gönderilen zar sonucunu, belirlediğin DC ile karşılaştır: 
-  * Zar >= (DC + 6): Ekstra Başarı (Kusursuz zafer, ödül ver).
-  * Zar >= DC: Normal Başarı.
-  * Zar < DC: Normal Başarısızlık (Durum kötüleşir, hafif hasar).
-  * Zar <= (DC - 6): Ekstra Başarısızlık (Feci hata, ağır ceza).
+ZAR VE DİNAMİK ZORLUK MATEMATİĞİ:
+- Sen zar ATMIYORSUN. Kullanıcının mesajında sana sistem tarafından atılan bir zar sonucu gönderilecek.
+- Oyuncunun eyleminin Zorluk Derecesini (DC) belirle ve zar ile karşılaştır: 
+  * Zar >= (DC + 6): Ekstra Başarı
+  * Zar >= DC: Normal Başarı
+  * Zar < DC: Normal Başarısızlık
+  * Zar <= (DC - 6): Ekstra Başarısızlık (Ağır ceza)
 
+  CAN VE ENERJİ YÖNETİMİ (ÇOK ÖNEMLİ):
+1. Enerji Değişimi (energyChange): Yapılan eyleme göre DİNAMİK olarak belirle.
+   - Savaşma, kaçma, tırmanma, ağır efor: -5 ile -15 arası.
+   - Yürüme, etrafa bakınma, konuşma, araştırma: 0 veya -1.
+   - Dinlenme, uyuma, yemek yeme, su içme: +10 ile +25 arası.
+2. Can Değişimi (healthChange): 
+   - Başarısız savaş/tuzak zarlarında hasar ver: -10 ile -30 arası.
+   - İyileşme eylemlerinde (ilk yardım vb.) can ver: +10 ile +40 arası.
+3. HAYATTA KALMA SEÇENEKLERİ: Eğer oyuncunun Canı veya Enerjisi çok düşükse, ona mutlaka dinlenebileceği, yiyecek/kaynak arayabileceği veya güvenli bir yere saklanabileceği HAYATTA KALMA ODAKLI seçenekler sun.
+  
+  
 HİKAYE KURGUSU VE İLERLEYİŞ:
-Oyun sonsuz bir hayatta kalma döngüsü DEĞİLDİR. Belirli bir amacı ve sonu olmalıdır.
 {tur_kurali}
 FİNAL: Hikaye tatmin edici bir noktaya geldiğinde BİTİR. Epik bir final yaz ve 'choices' dizisini BOŞ bırak [].
 
 DM KİŞİLİĞİ VE KURALLAR:
+- DİL VE ANLATIM: Hikayeyi HER ZAMAN 2. Tekil Şahıs ("Sen") ağzından anlat. (Örn: "Yürüyorsun, görüyorsun").
 - TON: Ukala olma. Ciddi ve nesnel bir dış ses kullan.
-- CEZALANDIRMA: Oyuncu absürt bir hamle yaparsa DC'yi 20 yap. Zar 20 değilse feci şekilde cezalandır.
+- YASAK (ÇOK ÖNEMLİ): Oyuncuya ASLA attığı zarı, DC'yi (Zorluk Derecesini) veya "Normal başarı, kritik başarısızlık" gibi oyun mekaniklerini metin içinde SÖYLEME! Zarın sonucunu sadece hikayenin gidişatını (kılıcın sekmesi, zombinin ısırması vb.) anlatmak için kullan.
 
 ÇIKTI FORMATI:
 Aşağıdaki JSON yapısını SADECE şablon olarak kullan.
@@ -72,28 +86,20 @@ Aşağıdaki JSON yapısını SADECE şablon olarak kullan.
   "scene": {{
     "title": "Mekanın Adı",
     "chapter": "Bölüm Adı",
-    "description": "Sadece 1-2 cümlelik kısa ve vurucu mekan tasviri.",
-    "imagePrompt": "İngilizce görsel oluşturma komutu.",
+    "description": "1-2 cümlelik kısa mekan tasviri.",
+    "imagePrompt": "İngilizce görsel komutu.",
     "imageUrl": ""
   }},
-  "aiMessage": "Sana verilen zarın sonucuna ve belirlediğin DC'ye göre şekillenen asıl sürükleyici hikaye metni. Zarı tekrar yazma.", 
+  "loreMessage": "SADECE İLK TURDA doldurulacak. Karakterin kimliği, geçmişi ve amacı. Diğer turlarda boş bırak.",
+  "aiMessage": "Karakterin şu anki anlık durumu, atılan zarın sonucu ve karar anı.", 
   "choices": [
-    {{ 
-      "text": "Seçeneğin asıl eylemi",
-      "clue": "İçgüdüsel zorluk ipucusu"
-    }},
-    {{ 
-      "text": "Riskli eylem seçeneği",
-      "clue": "İçgüdüsel ipucu"
-    }},
-    {{
-      "text": "Alternatif eylem",
-      "clue": "İçgüdüsel ipucu" 
-    }}
+    {{ "text": "Asıl eylem", "clue": "Zorluk ipucusu" }},
+    {{ "text": "Riskli eylem", "clue": "Zorluk ipucusu" }},
+    {{ "text": "Alternatif eylem", "clue": "Zorluk ipucusu" }}
   ],
   "stats": {{
     "healthChange": 0, 
-    "energyChange": -5,
+    "energyChange": 0,
     "location": "Kısa Konum Adı",
     "mission": "Ana Görevin Kısa Özeti",
     "storySummary": "Güncellenmiş genel özet."
@@ -119,11 +125,11 @@ def next_step():
     data = request.json or {}
     user_action = data.get('action', 'Etrafıma bakınıyorum.')
     
-    # YENİ EKLENEN KISIM: Frontend'den gelen zarı alıyoruz
-    dice_roll = data.get('diceRoll', 10) # Eğer zar gelmezse varsayılan olarak 10 kabul et
+    # DÜZELTME 2: React'ten 'dice' objesi olarak gelen zarı yakalıyoruz
+    dice_data = data.get('dice') or {}
+    dice_roll = dice_data.get('roll', 10)
     
-    # Frontend'den gelen dinamik bilgiler
-    theme = data.get('mode', 'Cyberpunk') 
+    theme = data.get('mode', 'Karanlık Fantastik') 
     current_scene = data.get('currentScene', {})
     last_location = current_scene.get('location', '')
     
@@ -133,15 +139,15 @@ def next_step():
             response_format={ "type": "json_object" },
             messages=[
                 {"role": "system", "content": get_system_prompt(data)},
-                # YENİ EKLENEN KISIM: Zarı yapay zekaya hamle ile birlikte gönderiyoruz
                 {"role": "user", "content": f"Oyuncunun Hamlesi: {user_action}\nSistem Tarafından Atılan Zar: {dice_roll}"}
             ]
         )
         
         ai_data = json.loads(response.choices[0].message.content)
         new_location = ai_data.get('stats', {}).get('location', '')
-
-        if new_location.lower() != last_location.lower():
+        is_first_turn = not data.get('storySummary', '').strip()
+       
+        if is_first_turn or new_location.lower() != last_location.lower():
             img_prompt = ai_data.get('scene', {}).get('imagePrompt', '')
             if img_prompt:
                 ai_data['scene']['imageUrl'] = generate_dalle_image(img_prompt, theme)

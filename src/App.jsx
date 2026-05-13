@@ -39,49 +39,16 @@ const narrationStyles = [
 const initialScene = {
   title: "Başlangıç Noktası",
   chapter: "Bölüm 1",
-  description:
-    "Maceranın eşiğindesin. Seçtiğin evren birazdan yapay zekâ tarafından şekillendirilecek.",
+  description: "Maceranın eşiğindesin. Seçtiğin evren birazdan yapay zekâ tarafından şekillendirilecek.",
   image: "https://images.unsplash.com/photo-1518709268805-4e9042af2176",
   location: "Başlangıç",
   mission: "İlk hamleni yap",
-  choices: [
-    {
-      text: "Etrafıma bakın",
-      clue: "Güvenli başlangıç hamlesi.",
-    },
-    {
-      text: "İleri doğru yürüyün",
-      clue: "Risk orta seviyede.",
-    },
-    {
-      text: "Çantamı kontrol edin",
-      clue: "",
-    },
-  ],
+  choices: [],
 }
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const rollD20 = () => Math.floor(Math.random() * 20) + 1
-
-const getDiceResult = (roll, difficultyId) => {
-  if (roll === 1) return "Kritik Başarısızlık"
-  if (roll === 20) return "Kritik Başarı"
-
-  if (difficultyId === "easy") {
-    if (roll >= 5) return "Başarılı"
-    return "Başarısız"
-  }
-
-  if (difficultyId === "hard") {
-    if (roll >= 15) return "Mükemmel Başarı"
-    if (roll >= 10) return "Kısmi Başarı"
-    return "Yetersiz Hamle"
-  }
-
-  if (roll >= 8) return "Başarılı"
-  return "Başarısız"
-}
 
 const getStoryPhase = (turnCount) => {
   if (turnCount <= 2) return "intro"
@@ -117,15 +84,13 @@ function App() {
   const [displayedImage, setDisplayedImage] = useState(initialScene.image)
   const [isImageLoading, setIsImageLoading] = useState(false)
 
-  const [messages, setMessages] = useState([
-    { sender: "ai", text: "Oyuna başlamak için bir seçim yap." },
-  ])
+  const [messages, setMessages] = useState([])
 
   const [input, setInput] = useState("")
   const [isThinking, setIsThinking] = useState(false)
   const [isRollingDice, setIsRollingDice] = useState(false)
   const [diceRoll, setDiceRoll] = useState(null)
-  const [diceResult, setDiceResult] = useState("")
+  
   const [health, setHealth] = useState(85)
   const [energy, setEnergy] = useState(60)
   const [saveMessage, setSaveMessage] = useState("")
@@ -184,48 +149,7 @@ function App() {
     setTimeout(() => setSaveMessage(""), 2200)
   }
 
-  const startGame = () => {
-    const activeScenario = getActiveScenario()
-    const startingHealth = selectedDifficulty.id === "hard" ? 70 : 85
-    const startingEnergy = selectedDifficulty.id === "hard" ? 50 : 60
-
-    const startingScene = {
-      ...initialScene,
-      title: `${activeScenario.title} Macerası`,
-      description: `${activeScenario.description} İlk kararın hikâyeyi başlatacak.`,
-    }
-
-    setHealth(startingHealth)
-    setEnergy(startingEnergy)
-    setTurnCount(0)
-    setStoryPhase("intro")
-    setFlags({})
-    setStorySummary("")
-    setCurrentScene(startingScene)
-    setDisplayedImage(startingScene.image)
-    setIsImageLoading(false)
-
-    setMessages([
-      {
-        sender: "ai",
-        text: `${activeScenario.title} modunda oyun başladı. İlk hamleni seç.`,
-      },
-    ])
-
-    setInput("")
-    setIsThinking(false)
-    setIsRollingDice(false)
-    setDiceRoll(null)
-    setDiceResult("")
-    setIsGameStarted(true)
-  }
-
-  const returnToMenu = () => {
-    setIsGameStarted(false)
-    setSaveMessage("")
-  }
-
-  const callAI = async (actionText, diceData = null, nextTurnCount, nextStoryPhase) => {
+  const callAI = async (actionText, diceData = null, nextTurnCount, nextStoryPhase, overrides = {}) => {
     const activeScenario = getActiveScenario()
 
     const response = await fetch(API_URL, {
@@ -239,25 +163,25 @@ function App() {
 
         dice: diceData,
 
-        mode: activeScenario.title,
-        theme: selectedMode.id,
-        customScenario: activeScenario.description,
+        mode: overrides.mode || activeScenario.title,
+        theme: overrides.theme || selectedMode.id,
+        customScenario: overrides.customScenario || activeScenario.description,
 
         difficulty: selectedDifficulty.id,
         difficultyTitle: selectedDifficulty.title,
         narrationStyle: selectedNarration.id,
         narrationStyleTitle: selectedNarration.title,
 
-        currentScene,
-        health,
-        energy,
+        currentScene: overrides.currentScene || currentScene,
+        health: overrides.health ?? health,
+        energy: overrides.energy ?? energy,
 
         turnCount: nextTurnCount,
         storyPhase: nextStoryPhase,
-        storySummary,
-        flags,
+        storySummary: overrides.storySummary ?? storySummary,
+        flags: overrides.flags || flags,
 
-        recentMessages: messages.slice(-6),
+        recentMessages: overrides.recentMessages || messages.slice(-6),
       }),
     })
 
@@ -277,12 +201,8 @@ function App() {
 
     return choices.map((choice) => {
       if (typeof choice === "string") {
-        return {
-          text: choice,
-          clue: "",
-        }
+        return { text: choice, clue: "" }
       }
-
       return {
         text: choice.text || choice.label || "Devam et",
         clue: choice.clue || choice.hint || "",
@@ -301,6 +221,7 @@ function App() {
         mission: data.stats?.mission || currentScene.mission,
         choices: normalizeChoices(data.choices),
       },
+      loreMessage: data.loreMessage || "",
       aiMessage: data.aiMessage || "Hikâye devam ediyor.",
       healthChange: Number(data.stats?.healthChange || 0),
       energyChange: Number(data.stats?.energyChange || 0),
@@ -331,18 +252,84 @@ function App() {
     }
   }
 
+  const startGame = async () => {
+    const activeScenario = getActiveScenario()
+    const startingHealth = selectedDifficulty.id === "hard" ? 70 : 85
+    const startingEnergy = selectedDifficulty.id === "hard" ? 50 : 60
+
+    const startingScene = {
+      ...initialScene,
+      title: `${activeScenario.title} Macerası`,
+      description: `${activeScenario.description} Hikayen başlıyor...`,
+    }
+
+    setHealth(startingHealth)
+    setEnergy(startingEnergy)
+    setTurnCount(0)
+    setStoryPhase("intro")
+    setFlags({})
+    setStorySummary("")
+    setCurrentScene(startingScene)
+    setDisplayedImage(startingScene.image)
+    setIsImageLoading(false)
+
+    setIsGameStarted(true)
+    setIsThinking(true)
+    setMessages([]) 
+
+    try {
+      const aiData = await callAI("Oyun başlıyor. Bana detaylı bir şekilde kim olduğumu ve ilk olayı anlat.", null, 0, "intro", {
+        health: startingHealth,
+        energy: startingEnergy,
+        currentScene: startingScene,
+        storySummary: "",
+        recentMessages: []
+      })
+
+      const normalizedData = normalizeAIData(aiData)
+      await updateSceneWithPreloadedImage(normalizedData.scene)
+
+      const newMessages = []
+      if (normalizedData.loreMessage && normalizedData.loreMessage.trim() !== "") {
+        newMessages.push({
+          sender: "ai",
+          type: "lore",
+          text: normalizedData.loreMessage,
+        })
+      }
+      newMessages.push({
+        sender: "ai",
+        text: normalizedData.aiMessage,
+      })
+
+      setMessages(newMessages)
+      setStorySummary(normalizedData.storySummary)
+
+    } catch (error) {
+      setMessages([
+        {
+          sender: "ai",
+          text: `AI bağlantısında hata oluştu: ${error.message}`,
+        },
+      ])
+    } finally {
+      setIsThinking(false)
+    }
+  }
+
   const handleAction = async (actionText, diceData = null) => {
     if (isThinking || isRollingDice) return
 
     const nextTurnCount = turnCount + 1
     const nextStoryPhase = getStoryPhase(nextTurnCount)
 
+    // Oyuncu mesajı: Sadece hamle ve zar sonucu (Başarılı/Başarısız yazısı kaldırıldı)
     setMessages((prev) => [
       ...prev,
       {
         sender: "user",
         text: diceData
-          ? `${actionText}\n🎲 Zar sonucu: ${diceData.roll}/20 — ${diceData.result}`
+          ? `${actionText}\n🎲 Zar sonucu: ${diceData.roll}/20`
           : actionText,
       },
     ])
@@ -369,13 +356,21 @@ function App() {
         }))
       }
 
-      setMessages((prev) => [
-        ...prev,
-        {
+      const newMessages = [];
+      if (normalizedData.loreMessage && normalizedData.loreMessage.trim() !== "") {
+        newMessages.push({
           sender: "ai",
-          text: normalizedData.aiMessage,
-        },
-      ])
+          type: "lore", 
+          text: normalizedData.loreMessage,
+        });
+      }
+      newMessages.push({
+        sender: "ai",
+        text: normalizedData.aiMessage,
+      });
+
+      setMessages((prev) => [...prev, ...newMessages]);
+
     } catch (error) {
       setMessages((prev) => [
         ...prev,
@@ -387,7 +382,6 @@ function App() {
     } finally {
       setIsThinking(false)
       setDiceRoll(null)
-      setDiceResult("")
     }
   }
 
@@ -395,25 +389,18 @@ function App() {
     if (isThinking || isRollingDice) return
 
     const roll = rollD20()
-    const result = getDiceResult(roll, selectedDifficulty.id)
 
     setDiceRoll(null)
-    setDiceResult("")
     setIsRollingDice(true)
 
     await delay(700)
-
     setDiceRoll(roll)
-    setDiceResult(result)
-
     await delay(900)
-
     setIsRollingDice(false)
 
     await handleAction(actionText, {
       type: "d20",
       roll,
-      result,
       difficulty: selectedDifficulty.id,
     })
   }
@@ -427,7 +414,7 @@ function App() {
   }
 
   const handleNewGame = () => {
-    startGame()
+    setIsGameStarted(false)
   }
 
   const handleSaveGame = () => {
@@ -442,7 +429,6 @@ function App() {
       messages,
       health,
       energy,
-
       turnCount,
       storyPhase,
       flags,
@@ -483,6 +469,11 @@ function App() {
     setIsGameStarted(true)
 
     showSaveMessage("Kayıt yüklendi.")
+  }
+
+  const returnToMenu = () => {
+    setIsGameStarted(false)
+    setSaveMessage("")
   }
 
   const activeScenario = getActiveScenario()
@@ -562,7 +553,7 @@ function App() {
                   <label>Kendi senaryon</label>
                   <textarea
                     value={customScenario}
-                    placeholder="Örn: Oyuncu, terk edilmiş bir uzay gemisinde uyanır. Geminin yapay zekâsı bozulmuştur ve her kapının arkasında farklı bir zaman kırılması vardır..."
+                    placeholder="Örn: Oyuncu, terk edilmiş bir uzay gemisinde uyanır..."
                     onChange={(event) => {
                       setCustomScenario(event.target.value)
                       setSelectedMode({
@@ -717,10 +708,6 @@ function App() {
 
           <div className="character-panel" id="karakter">
             <div>
-              <span>Karakter</span>
-              <strong>Gezgin Arda</strong>
-            </div>
-            <div>
               <span>Oyun Modu</span>
               <strong>{activeScenario.title}</strong>
             </div>
@@ -751,7 +738,9 @@ function App() {
                 className={`message ${
                   message.sender === "ai" ? "ai-message" : "user-message"
                 }`}
+                style={message.type === "lore" ? { borderLeft: "4px solid #7c3aed", marginBottom: "8px" } : {}}
               >
+                {message.type === "lore" && <div style={{fontWeight: "bold", marginBottom: "4px", color: "#c4b5fd"}}>Geçmişin:</div>}
                 {message.text}
               </div>
             ))}
@@ -759,14 +748,11 @@ function App() {
             {isRollingDice && (
               <div className="dice-roll-card">
                 <div className="dice-icon">🎲</div>
-
                 <div className="dice-roll-content">
                   <span>Zar atılıyor...</span>
-
                   {diceRoll ? (
                     <>
                       <strong>{diceRoll}/20</strong>
-                      <p>{diceResult}</p>
                     </>
                   ) : (
                     <p>Şans hikâyeyi şekillendiriyor.</p>
@@ -777,7 +763,7 @@ function App() {
 
             {isThinking && (
               <div className="message ai-message thinking">
-                AI zar sonucuna göre yeni sahneyi oluşturuyor...
+                AI zarı ve durumu değerlendiriyor...
               </div>
             )}
           </div>
@@ -795,7 +781,6 @@ function App() {
                   className="choice-button"
                 >
                   <span className="choice-text">{choiceText}</span>
-
                   {choiceClue && <span className="choice-clue">{choiceClue}</span>}
                 </button>
               )
